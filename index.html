@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="Installable PWA for quick one-to-one video calls.">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <title>Quick Video Call</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Fast browser calling</p>
+                <h1>Quick Video Call</h1>
+                <p class="subtitle">Create a room, share the link, and join from mobile or desktop without installing any app.</p>
+            </div>
+            <div class="hero-card">
+                <label class="field-label" for="phoneNumber">Room ID or phone number</label>
+                <div class="input-section">
+                    <input type="tel" id="phoneNumber" placeholder="Example: 9876543210" maxlength="30" autocomplete="off">
+                    <button id="createCall" type="button">Create</button>
+                    <button id="joinCall" type="button" class="secondary">Join</button>
+                </div>
+                <p class="helper-text">Tip: deployed site par current domain ka link automatically share hoga.</p>
+            </div>
+        </section>
+
+        <section class="call-section" id="callSection" hidden>
+            <div class="call-info">
+                <div>
+                    <p class="section-label">Invite Link</p>
+                    <p id="shareLink"></p>
+                </div>
+                <div class="share-actions">
+                    <button id="copyLink" type="button">Copy Link</button>
+                    <button id="shareButton" type="button" class="secondary">Share</button>
+                    <button id="installApp" type="button" class="secondary" hidden>Install App</button>
+                </div>
+            </div>
+
+            <div class="videos">
+                <article class="video-container">
+                    <div class="video-badge">You</div>
+                    <video id="localVideo" autoplay muted playsinline></video>
+                </article>
+                <article class="video-container">
+                    <div class="video-badge">Other Person</div>
+                    <video id="remoteVideo" autoplay playsinline></video>
+                </article>
+            </div>
+
+            <div class="controls">
+                <button id="toggleCamera" type="button" class="secondary">Switch Camera</button>
+                <button id="muteBtn" type="button" class="secondary">Mute</button>
+                <button id="endCall" type="button" class="danger">End Call</button>
+            </div>
+        </section>
+
+        <div id="status" class="status">Preparing app...</div>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
