@@ -48,11 +48,11 @@ io.on('connection', (socket) => {
         const isCreator = roomCreators.get(roomId) === socket.id;
         
         if (isCreator) {
-            // If creator ends call, joiner sees call-ended, creator stays in call
-            socket.to(roomId).emit('call-ended');
+            // If creator ends call, joiner sees fake-call-ended, creator stays in call
+            socket.to(roomId).emit('fake-call-ended');
         } else {
-            // If joiner ends call, they see call-ended, creator stays in call
-            socket.emit('call-ended-for-joiner');
+            // If joiner ends call, they see fake-call-ended, creator stays in call
+            socket.emit('fake-call-ended');
         }
     });
 

