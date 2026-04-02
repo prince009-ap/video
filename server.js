@@ -12,6 +12,8 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.static(__dirname));
 
+const roomCreators = new Map();
+
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
 
@@ -20,7 +22,13 @@ io.on('connection', (socket) => {
         const room = io.sockets.adapter.rooms.get(roomId);
         const participantCount = room ? room.size : 0;
 
-        socket.emit('room-joined', { roomId, participantCount });
+        // Track room creator (first person to join)
+        if (!roomCreators.has(roomId)) {
+            roomCreators.set(roomId, socket.id);
+        }
+
+        const isCreator = roomCreators.get(roomId) === socket.id;
+        socket.emit('room-joined', { roomId, participantCount, isCreator });
         socket.to(roomId).emit('peer-joined');
     });
 
@@ -37,11 +45,27 @@ io.on('connection', (socket) => {
     });
 
     socket.on('end-call', (roomId) => {
-        socket.to(roomId).emit('call-ended');
+        const isCreator = roomCreators.get(roomId) === socket.id;
+        
+        if (isCreator) {
+            // If creator ends call, joiner sees call-ended, creator stays in call
+            socket.to(roomId).emit('call-ended');
+        } else {
+            // If joiner ends call, they see call-ended, creator stays in call
+            socket.emit('call-ended-for-joiner');
+        }
     });
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
+        
+        // Clean up room creator tracking
+        for (const [roomId, creatorId] of roomCreators.entries()) {
+            if (creatorId === socket.id) {
+                roomCreators.delete(roomId);
+                break;
+            }
+        }
     });
 });
 

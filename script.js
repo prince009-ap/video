@@ -5,6 +5,7 @@ let isMuted = false;
 let useFrontCamera = true;
 let callActive = false;
 let deferredInstallPrompt = null;
+let isCreator = false;
 
 const configuration = {
     iceServers: [
@@ -61,8 +62,9 @@ socket.on('disconnect', () => {
     statusText.textContent = 'Server disconnected. Refresh after starting the server again.';
 });
 
-socket.on('room-joined', async ({ roomId, participantCount }) => {
+socket.on('room-joined', async ({ roomId, participantCount, isCreator: creatorStatus }) => {
     activeRoomId = roomId;
+    isCreator = creatorStatus || false;
     statusText.textContent = participantCount > 1 ? 'Peer connected. Starting call...' : 'Waiting for another person to join...';
 
     if (participantCount > 1) {
@@ -106,6 +108,10 @@ socket.on('ice-candidate', async ({ candidate }) => {
 
 socket.on('call-ended', () => {
     cleanupCall('Other user ended the call.');
+});
+
+socket.on('call-ended-for-joiner', () => {
+    cleanupCall('Call ended.');
 });
 }
 
@@ -322,7 +328,46 @@ function endCall() {
         socket.emit('end-call', activeRoomId);
     }
 
-    cleanupCall('Call ended.');
+    // Only cleanup if not creator (creator stays in call)
+    if (!isCreator) {
+        cleanupCall('Call ended.');
+    } else {
+        statusText.textContent = 'Other user left the call.';
+        // Only cleanup remote video and peer connection for creator
+        if (peerConnection) {
+            peerConnection.ontrack = null;
+            peerConnection.onicecandidate = null;
+            peerConnection.onconnectionstatechange = null;
+            peerConnection.getSenders().forEach((sender) => {
+                try {
+                    if (sender.track && sender.track.kind === 'video') {
+                        // Keep local video track, stop remote tracks
+                    }
+                } catch (error) {
+                    console.error('Error stopping sender track:', error);
+                }
+            });
+            peerConnection.getReceivers().forEach((receiver) => {
+                try {
+                    if (receiver.track) {
+                        receiver.track.stop();
+                    }
+                } catch (error) {
+                    console.error('Error stopping receiver track:', error);
+                }
+            });
+            peerConnection.close();
+            peerConnection = null;
+        }
+
+        if (remoteVideo.srcObject) {
+            remoteVideo.srcObject.getTracks?.().forEach((track) => track.stop());
+        }
+        remoteVideo.srcObject = null;
+        
+        // Keep local video running for creator
+        callActive = false;
+    }
 }
 
 function cleanupCall(message = 'Call ended.') {
