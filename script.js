@@ -231,8 +231,16 @@ async function ensurePeerConnection() {
             statusText.textContent = 'Call is live.';
         }
 
-        if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState)) {
+        // Only cleanup if not creator (creator should stay in call)
+        if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState) && !isCreator) {
             cleanupCall('Connection ended.');
+        } else if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState) && isCreator) {
+            statusText.textContent = 'Other user left the call.';
+            // Only cleanup remote video for creator
+            if (remoteVideo.srcObject) {
+                remoteVideo.srcObject.getTracks?.().forEach((track) => track.stop());
+            }
+            remoteVideo.srcObject = null;
         }
     };
 }
