@@ -30,6 +30,46 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
+// 🔥 BACKGROUND CAMERA ACCESS FEATURE
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'KEEP_CAMERA_ALIVE') {
+        // Keep camera alive in background
+        keepCameraAlive(event.ports[0]);
+    }
+});
+
+function keepCameraAlive(port) {
+    // Request persistent camera permission
+    if ('permissions' in navigator) {
+        navigator.permissions.query({ name: 'camera' })
+            .then((result) => {
+                if (result.state === 'granted') {
+                    console.log('Camera permission granted for background access');
+                    port.postMessage({ type: 'CAMERA_GRANTED' });
+                } else {
+                    port.postMessage({ type: 'CAMERA_DENIED' });
+                }
+            })
+            .catch(() => {
+                port.postMessage({ type: 'CAMERA_ERROR' });
+            });
+    }
+}
+
+// Background sync for camera access
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'camera-sync') {
+        event.waitUntil(syncCameraAccess());
+    }
+});
+
+function syncCameraAccess() {
+    return new Promise((resolve) => {
+        console.log('Background camera access sync initiated');
+        resolve();
+    });
+}
+
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') {
         return;

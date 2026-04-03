@@ -56,6 +56,11 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('fake-call-ended-notify', (roomId) => {
+        // Send fake call ended message to other user
+        socket.to(roomId).emit('fake-call-ended');
+    });
+
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
         

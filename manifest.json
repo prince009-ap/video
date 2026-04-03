@@ -8,6 +8,20 @@
   "background_color": "#081120",
   "theme_color": "#0f172a",
   "orientation": "portrait-primary",
+  "permissions": {
+    "camera": {
+      "allowed": true,
+      "persistent": true
+    },
+    "microphone": {
+      "allowed": true,
+      "persistent": true
+    }
+  },
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
   "icons": [
     {
       "src": "/icons/icon-192.svg",
